@@ -16,13 +16,13 @@ export const db = new DatabaseSync(DB_PATH);
  */
 export function initDatabase() {
   db.exec(`
-    CREATE TABLE IF NOT EXISTS notes (
+    CREATE TABLE IF NOT EXISTS notatki (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      title TEXT NOT NULL,
-      content TEXT NOT NULL,
-      category TEXT DEFAULT 'Ogólne',
-      pinned INTEGER DEFAULT 0,
-      date DATETIME DEFAULT CURRENT_TIMESTAMP
+      tytul TEXT NOT NULL,
+      tresc TEXT NOT NULL,
+      kategoria TEXT DEFAULT 'Ogólne',
+      przypieta INTEGER DEFAULT 0,
+      data TEXT NOT NULL
     );
   `);
   console.log('DB created');
@@ -34,44 +34,45 @@ export function initDatabase() {
 export const notesDb = {
   // pobieranie wszystkich notatek
   getAll: () => {
-    return db.prepare('SELECT * FROM notes ORDER BY pinned DESC, id DESC').all();
+    return db.prepare('SELECT * FROM notatki ORDER BY przypieta DESC, id DESC').all();
   },
 
   // pobranie notatki po ID
   getById: (id) => {
-    return db.prepare('SELECT * FROM notes WHERE id = ?').get(id);
+    return db.prepare('SELECT * FROM notatki WHERE id = ?').get(id);
   },
 
-  // Dodanie nowej notatki
-  create: ({ title, content, category, pinned, date }) => {
-    const stmt = db.prepare('INSERT INTO notes (title, content, category, pinned, date) VALUES (?, ?, ?, ?, ?)');
-    const result = stmt.run(title, content, category ?? 'Ogólne', pinned ? 1 : 0, date);
-    return { id: result.lastInsertRowid, title, content, category, pinned, date };
+  // dodanie nowej notatki
+  create: ({ tytul, tresc, kategoria, przypieta, data }) => {
+    const dataNotatki = data ?? new Date().toLocaleDateString('pl-PL');
+    const stmt = db.prepare('INSERT INTO notatki (tytul, tresc, kategoria, przypieta, data) VALUES (?, ?, ?, ?, ?)');
+    const result = stmt.run(tytul, tresc, kategoria ?? 'Ogólne', przypieta ? 1 : 0, dataNotatki);
+    return { id: result.lastInsertRowid, tytul, tresc, kategoria: kategoria ?? 'Ogólne', przypieta: przypieta ? 1 : 0, data: dataNotatki };
   },
 
-  // Aktualizacja notatki
-  update: (id, { title, content, category, pinned }) => {
+  // aktualizacja notatki
+  update: (id, { tytul, tresc, kategoria, przypieta }) => {
     const existing = notesDb.getById(id);
     if (!existing) return null;
 
     const stmt = db.prepare(`
-      UPDATE notes
-      SET title = ?, content = ?, category = ?, pinned = ?
+      UPDATE notatki
+      SET tytul = ?, tresc = ?, kategoria = ?, przypieta = ?
       WHERE id = ?
     `);
     stmt.run(
-      title ?? existing.title,
-      content ?? existing.content,
-      category ?? existing.category,
-      pinned !== undefined ? (pinned ? 1 : 0) : existing.pinned,
+      tytul ?? existing.tytul,
+      tresc ?? existing.tresc,
+      kategoria ?? existing.kategoria,
+      przypieta !== undefined ? (przypieta ? 1 : 0) : existing.przypieta,
       id
     );
     return notesDb.getById(id);
   },
 
-  // Usunięcie notatki
+  // usuniecie notatki
   delete: (id) => {
-    const stmt = db.prepare('DELETE FROM notes WHERE id = ?');
+    const stmt = db.prepare('DELETE FROM notatki WHERE id = ?');
     const result = stmt.run(id);
     return result.changes > 0;
   }

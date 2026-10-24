@@ -1,9 +1,11 @@
 <script setup>
 // Funkcje Vue
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 
-// Odczyt zapisanych notatek
-const notatki = ref(JSON.parse(localStorage.getItem('notatki') || '[]'))
+const API_URL = `http://${window.location.hostname}:3000/api/notes`
+
+// Odczyt zapisanych notatek z backendu
+const notatki = ref([])
 
 // Ustawienia aplikacji
 const szukaj = ref('')
@@ -20,6 +22,20 @@ const wybranaKategoria = ref('Studia')
 
 // Kategorie
 const kategorie = ['Wszystkie', 'Studia', 'Praca', 'Prywatne']
+
+// Pobieranie notatek z backendu
+async function wczytajNotatki() {
+  try {
+    const res = await fetch(API_URL)
+    notatki.value = await res.json()
+  } catch (err) {
+    console.error('Błąd pobierania notatek:', err)
+  }
+}
+
+onMounted(() => {
+  wczytajNotatki()
+})
 
 // Filtrowanie i sortowanie notatek
 const widoczneNotatki = computed(() => {
@@ -54,11 +70,6 @@ const widoczneNotatki = computed(() => {
     })
 })
 
-// Zapis notatek w localStorage
-watch(notatki, (wartosc) => {
-  localStorage.setItem('notatki', JSON.stringify(wartosc))
-}, { deep: true })
-
 // Zapis ustawienia motywu
 watch(trybCiemny, (wartosc) => {
   localStorage.setItem('trybCiemny', String(wartosc))
@@ -74,29 +85,49 @@ function otworzFormularz() {
 }
 
 // Dodawanie i edycja notatek
-function zapiszNotatke() {
+async function zapiszNotatke() {
   // Sprawdzenie tytułu
   if (!tytul.value.trim()) return
 
   if (edytowaneId.value !== null) {
-    // Wyszukanie edytowanej notatki
-    const notatka = notatki.value.find(n => n.id === edytowaneId.value)
-
-    if (notatka) {
-      notatka.tytul = tytul.value
-      notatka.tresc = tresc.value
-      notatka.kategoria = wybranaKategoria.value
+    // Edycja notatki
+    try {
+      const res = await fetch(`${API_URL}/${edytowaneId.value}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tytul: tytul.value,
+          tresc: tresc.value,
+          kategoria: wybranaKategoria.value
+        })
+      })
+      const zaktualizowana = await res.json()
+      const index = notatki.value.findIndex(n => n.id === edytowaneId.value)
+      if (index !== -1) {
+        notatki.value[index] = zaktualizowana
+      }
+    } catch (err) {
+      console.error('Błąd aktualizacji notatki:', err)
     }
   } else {
     // Nowa notatka
-    notatki.value.unshift({
-      id: Date.now(),
-      tytul: tytul.value,
-      tresc: tresc.value,
-      kategoria: wybranaKategoria.value,
-      przypieta: false,
-      data: new Date().toLocaleDateString('pl-PL')
-    })
+    try {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tytul: tytul.value,
+          tresc: tresc.value,
+          kategoria: wybranaKategoria.value,
+          przypieta: 0,
+          data: new Date().toLocaleDateString('pl-PL')
+        })
+      })
+      const nowa = await res.json()
+      notatki.value.unshift(nowa)
+    } catch (err) {
+      console.error('Błąd dodawania notatki:', err)
+    }
   }
 
   // Zamknięcie formularza
@@ -113,15 +144,36 @@ function edytuj(n) {
 }
 
 // Usuwanie z potwierdzeniem
-function usun(id) {
+async function usun(id) {
   if (confirm('Czy na pewno usunąć notatkę?')) {
-    notatki.value = notatki.value.filter(n => n.id !== id)
+    try {
+      await fetch(`${API_URL}/${id}`, { method: 'DELETE' })
+      notatki.value = notatki.value.filter(n => n.id !== id)
+    } catch (err) {
+      console.error('Błąd usuwania notatki:', err)
+    }
   }
 }
 
 // Przypinanie notatki
-function przypnij(n) {
-  n.przypieta = !n.przypieta
+async function przypnij(n) {
+  const nowyStan = n.przypieta ? 0 : 1
+  try {
+    const res = await fetch(`${API_URL}/${n.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ przypieta: nowyStan })
+    })
+    const zaktualizowana = await res.json()
+    const index = notatki.value.findIndex(item => item.id === n.id)
+    if (index !== -1) {
+      notatki.value[index] = zaktualizowana
+    } else {
+      n.przypieta = nowyStan
+    }
+  } catch (err) {
+    console.error('Błąd przypinania notatki:', err)
+  }
 }
 </script>
 

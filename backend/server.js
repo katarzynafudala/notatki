@@ -34,29 +34,27 @@ app.get('/api/notes/:id', (req, res) => {
 
 // dodanie nowej notatki
 app.post('/api/notes', (req, res) => {
-  const { title, content, category, pinned, date } = req.body;
-  if (!title || !content) {
+  const { tytul, tresc, kategoria, przypieta, data } = req.body;
+  if (!tytul || !tresc) {
     return res.status(400).json({ error: 'Tytuł i treść są wymagane' });
   }
 
-  const newNote = notesDb.create({ title, content, category, pinned, date });
+  const newNote = notesDb.create({ tytul, tresc, kategoria, przypieta, data });
   res.status(201).json(newNote);
-
-  console.log("new")
+  console.log('new');
 });
 
 // edycja notatki
 app.put('/api/notes/:id', (req, res) => {
   const { id } = req.params;
-  const { title, content, category, pinned } = req.body;
+  const { tytul, tresc, kategoria, przypieta } = req.body;
 
-  const updatedNote = notesDb.update(id, { title, content, category, pinned });
+  const updatedNote = notesDb.update(id, { tytul, tresc, kategoria, przypieta });
   if (!updatedNote) {
     return res.status(404).json({ error: 'Notatka nie istnieje' });
   }
   res.json(updatedNote);
-
-  console.log("edit")
+  console.log('edit');
 });
 
 // usuniecie notatki
@@ -68,8 +66,7 @@ app.delete('/api/notes/:id', (req, res) => {
     return res.status(404).json({ error: 'Notatka nie istnieje' });
   }
   res.json({ success: true, id: Number(id) });
-
-  console.log("delete")
+  console.log('delete');
 });
 
 // obsluga 404
@@ -78,6 +75,6 @@ app.use((req, res) => {
 });
 
 // start serwera
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
 });
