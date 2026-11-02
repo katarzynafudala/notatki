@@ -1,0 +1,77 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: sans-serif;
+  color: black;
+  background: #f8e9ee;
+}
+
+.page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+}
+
+.panel {
+  width: 440px;
+  padding: 36px;
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 0 24px rgb(150, 150, 150);
+}
+
+label {
+  display: block;
+  font-weight: bold;
+}
+
+input {
+  display: block;
+  width: 100%;
+  padding: 14px;
+  margin: 10px 0;
+  border: 2px solid rgb(255, 204, 210);
+  border-radius: 10px;
+  font-size: medium;
+  background: white;
+}
+
+/* Stylowanie input boxa w razie bledu */
+input[aria-invalid="true"] {
+  border-color: red;
+}
+
+.error {
+  min-height: 18px;
+  margin: 5px 0 8px;
+  font-size: 13px;
+  font-weight: bold;
+  color: red;
+  
+}
+
+.status:empty {
+  display: none;
+}
+
+button {
+  border: 0;
+  width: 100%;
+  padding: 16px;
+  margin-top: 10px;
+  border-radius: 10px;
+  background: #e6b7c8;
+  font-weight: bold;
+  cursor: pointer;
+  font-size: medium;
+}
+
+.status {
+  padding: 0;
+  background: transparent;
+  color: #65836b;
+  font-weight: bold;
+}

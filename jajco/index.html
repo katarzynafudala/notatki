@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Utwórz konto</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <main class="page">
+    <section class="panel">
+      <h1>Utwórz konto</h1>
+
+      <form id="registration-form" novalidate>
+        <div class="field">
+          <label for="email">Adres e-mail</label>
+          <input id="email" type="email" placeholder="np. anna@domena.pl" autocomplete="email" aria-describedby="email-error" required>
+          <p id="email-error" class="error" aria-live="polite"></p>
+        </div>
+
+        <div class="field">
+          <label for="password">Hasło</label>
+          <input id="password" type="password" placeholder="Minimum 8 znaków" autocomplete="new-password" aria-describedby="password-error" required minlength="8">
+          <p id="password-error" class="error" aria-live="polite"></p>
+        </div>
+
+        <div class="field">
+          <label for="confirm-password">Powtórz hasło</label>
+          <input id="confirm-password" type="password" placeholder="Wpisz hasło ponownie" autocomplete="new-password" aria-describedby="confirm-error" required>
+          <p id="confirm-error" class="error" aria-live="polite"></p>
+        </div>
+
+        <button type="submit">Utwórz konto</button>
+        <p id="form-status" class="status" role="status"></p>
+      </form>
+    </section>
+  </main>
+  <script src="script.js"></script>
+</body>
+
+</html>
