@@ -1,6 +1,11 @@
 import express from 'express';
 import cors from 'cors';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { initDatabase, notesDb } from './db.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -11,6 +16,12 @@ initDatabase();
 // middleware
 app.use(cors());
 app.use(express.json());
+
+// serwowanie strony codename "jajco"
+app.use('/jajco', express.static(path.join(__dirname, '../jajco')));
+
+// serwowanie zbudowanego frontendu (jeśli istnieje)
+app.use(express.static(path.join(__dirname, '../frontend/dist')));
 
 // healthcheck
 app.get('/api/health', (req, res) => {

@@ -33,8 +33,20 @@ async function wczytajNotatki() {
   }
 }
 
+// Sprawdzenie czy użytkownik jest zalogowany
+if (!localStorage.getItem('user_token')) {
+  window.location.href = '/jajco'
+}
+
+function wyloguj() {
+  localStorage.removeItem('user_token')
+  window.location.href = '/jajco'
+}
+
 onMounted(() => {
-  wczytajNotatki()
+  if (localStorage.getItem('user_token')) {
+    wczytajNotatki()
+  }
 })
 
 // Filtrowanie i sortowanie notatek
@@ -191,9 +203,14 @@ async function przypnij(n) {
         </div>
       </div>
 
-      <button class="przelacznik" @click="trybCiemny = !trybCiemny">
-        {{ trybCiemny ? '☀️ Tryb jasny' : '🌙 Tryb ciemny' }}
-      </button>
+      <div class="akcje-naglowka">
+        <button class="przelacznik" @click="trybCiemny = !trybCiemny">
+          {{ trybCiemny ? '☀️ Tryb jasny' : '🌙 Tryb ciemny' }}
+        </button>
+        <button class="wyloguj-btn" @click="wyloguj" title="Wyloguj się">
+          Wyloguj
+        </button>
+      </div>
     </header>
 
     <main>
@@ -394,6 +411,12 @@ button {
   font: inherit;
 }
 
+.akcje-naglowka {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 /* Jasnoróżowy przycisk zmiany motywu */
 .przelacznik {
   border: none;
@@ -402,6 +425,23 @@ button {
   border-radius: 12px;
   padding: 12px 16px;
   font-weight: 600;
+  cursor: pointer;
+}
+
+.wyloguj-btn {
+  border: none;
+  background: #fce8ec;
+  color: #a33b52;
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  font: inherit;
+  transition: background 0.2s;
+}
+
+.wyloguj-btn:hover {
+  background: #f8d5dc;
 }
 
 main {
@@ -754,6 +794,15 @@ h2 {
   color: #efc2cf;
 }
 
+.ciemny .wyloguj-btn {
+  background: #4a2d36;
+  color: #f7a8b8;
+}
+
+.ciemny .wyloguj-btn:hover {
+  background: #5a3542;
+}
+
 /* Jasny tekst na ciemnych kartach */
 .ciemny .notatka {
   color: #f2e9e9;
@@ -809,7 +858,8 @@ h2 {
   }
 
   /* Przycisk zmiany motywu */
-  .przelacznik {
+  .przelacznik,
+  .wyloguj-btn {
     padding: 10px;
     font-size: 12px;
   }
