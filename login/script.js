@@ -1,3 +1,8 @@
+// Jeśli użytkownik jest już zalogowany, przenieś do notatek
+if (localStorage.getItem('user_token')) {
+  window.location.href = '/';
+}
+
 // Pola formularza
 const form = document.querySelector('#registration-form');
 const email = document.querySelector('#email');
@@ -54,7 +59,11 @@ form.addEventListener('submit', event => {
 
   const results = fields.map(check);
   if (results.every(Boolean)) {
-    status.textContent = 'Formularz został poprawnie wypełniony.';
+    localStorage.setItem('user_token', email.value.trim());
+    status.textContent = 'Konto utworzone! Przekierowywanie do notatek...';
+    setTimeout(() => {
+      window.location.href = '/';
+    }, 600);
   } else {
     status.textContent = '';
     fields[results.indexOf(false)].focus();
