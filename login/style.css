@@ -50,7 +50,6 @@ input[aria-invalid="true"] {
   font-size: 13px;
   font-weight: bold;
   color: red;
-  
 }
 
 .status:empty {
@@ -67,11 +66,38 @@ button {
   font-weight: bold;
   cursor: pointer;
   font-size: medium;
+  transition: opacity 0.2s;
+}
+
+button:hover {
+  opacity: 0.9;
+}
+
+.toggle-mode {
+  text-align: center;
+  margin: 14px 0 0;
+  font-size: 14px;
+}
+
+.toggle-mode a {
+  color: #a33b52;
+  text-decoration: none;
+  font-weight: bold;
+}
+
+.toggle-mode a:hover {
+  text-decoration: underline;
 }
 
 .status {
   padding: 0;
+  margin-top: 12px;
   background: transparent;
-  color: #65836b;
+  color: #2e7d32;
   font-weight: bold;
+  text-align: center;
+}
+
+.status.error-status {
+  color: red;
 }

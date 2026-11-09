@@ -4,6 +4,19 @@ import { ref, computed, watch, onMounted } from 'vue'
 
 const API_URL = `http://${window.location.hostname}:3000/api/notes`
 
+// Zalogowany użytkownik
+const zalogowanyUser = ref(localStorage.getItem('user_token') || '')
+
+// Pomocnicza funkcja fetch z nagłówkiem autoryzacji
+function authFetch(url, options = {}) {
+  const token = localStorage.getItem('user_token') || ''
+  const headers = {
+    ...options.headers,
+    'Authorization': `Bearer ${token}`
+  }
+  return fetch(url, { ...options, headers })
+}
+
 // Odczyt zapisanych notatek z backendu
 const notatki = ref([])
 
@@ -26,7 +39,11 @@ const kategorie = ['Wszystkie', 'Studia', 'Praca', 'Prywatne']
 // Pobieranie notatek z backendu
 async function wczytajNotatki() {
   try {
-    const res = await fetch(API_URL)
+    const res = await authFetch(API_URL)
+    if (res.status === 401) {
+      wyloguj()
+      return
+    }
     notatki.value = await res.json()
   } catch (err) {
     console.error('Błąd pobierania notatek:', err)
@@ -104,7 +121,7 @@ async function zapiszNotatke() {
   if (edytowaneId.value !== null) {
     // Edycja notatki
     try {
-      const res = await fetch(`${API_URL}/${edytowaneId.value}`, {
+      const res = await authFetch(`${API_URL}/${edytowaneId.value}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -124,7 +141,7 @@ async function zapiszNotatke() {
   } else {
     // Nowa notatka
     try {
-      const res = await fetch(API_URL, {
+      const res = await authFetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -159,7 +176,7 @@ function edytuj(n) {
 async function usun(id) {
   if (confirm('Czy na pewno usunąć notatkę?')) {
     try {
-      await fetch(`${API_URL}/${id}`, { method: 'DELETE' })
+      await authFetch(`${API_URL}/${id}`, { method: 'DELETE' })
       notatki.value = notatki.value.filter(n => n.id !== id)
     } catch (err) {
       console.error('Błąd usuwania notatki:', err)
@@ -171,7 +188,7 @@ async function usun(id) {
 async function przypnij(n) {
   const nowyStan = n.przypieta ? 0 : 1
   try {
-    const res = await fetch(`${API_URL}/${n.id}`, {
+    const res = await authFetch(`${API_URL}/${n.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ przypieta: nowyStan })
@@ -204,6 +221,7 @@ async function przypnij(n) {
       </div>
 
       <div class="akcje-naglowka">
+        <span class="uzytkownik-info" v-if="zalogowanyUser">{{ zalogowanyUser }}</span>
         <button class="przelacznik" @click="trybCiemny = !trybCiemny">
           {{ trybCiemny ? '☀️ Tryb jasny' : '🌙 Tryb ciemny' }}
         </button>
@@ -415,6 +433,15 @@ button {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.uzytkownik-info {
+  font-size: 13px;
+  font-weight: 600;
+  color: #805361;
+  padding: 6px 12px;
+  background: #fff5f7;
+  border-radius: 10px;
 }
 
 /* Jasnoróżowy przycisk zmiany motywu */
@@ -790,6 +817,11 @@ h2 {
 
 /* Przycisk przełączania motywu w trybie ciemnym */
 .ciemny .przelacznik {
+  background: #45383d;
+  color: #efc2cf;
+}
+
+.ciemny .uzytkownik-info {
   background: #45383d;
   color: #efc2cf;
 }

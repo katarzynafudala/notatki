@@ -4,14 +4,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Utwórz konto</title>
+  <title id="page-title">Utwórz konto</title>
   <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
   <main class="page">
     <section class="panel">
-      <h1>Utwórz konto</h1>
+      <h1 id="form-heading">Utwórz konto</h1>
 
       <form id="registration-form" novalidate>
         <div class="field">
@@ -26,13 +26,16 @@
           <p id="password-error" class="error" aria-live="polite"></p>
         </div>
 
-        <div class="field">
+        <div class="field" id="confirm-field">
           <label for="confirm-password">Powtórz hasło</label>
           <input id="confirm-password" type="password" placeholder="Wpisz hasło ponownie" autocomplete="new-password" aria-describedby="confirm-error" required>
           <p id="confirm-error" class="error" aria-live="polite"></p>
         </div>
 
-        <button type="submit">Utwórz konto</button>
+        <button type="submit" id="submit-btn">Utwórz konto</button>
+        <p class="toggle-mode">
+          <a href="#" id="toggle-auth">Masz już konto? Zaloguj się</a>
+        </p>
         <p id="form-status" class="status" role="status"></p>
       </form>
     </section>
