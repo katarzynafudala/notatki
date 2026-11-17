@@ -7,7 +7,7 @@ import { initDatabase, notesDb, usersDb, verifyPassword } from './db.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const app = express();
+export const app = express();
 const PORT = process.env.PORT || 3000;
 
 // start bazy
@@ -170,12 +170,44 @@ app.delete('/api/notes/:id', requireAuth, (req, res) => {
   res.json({ success: true, id: Number(id) });
 });
 
+// udostępnienie notatki innemu użytkownikowi po adresie e-mail (tylko do odczytu)
+app.post('/api/notes/:id/share', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const { email } = req.body;
+  if (!email || !email.trim()) {
+    return res.status(400).json({ error: 'Podaj adres e-mail odbiorcy' });
+  }
+
+  const result = notesDb.share(Number(id), req.user.id, email.trim());
+  if (result.error) {
+    return res.status(result.status || 400).json({ error: result.error });
+  }
+  res.json(result.note);
+});
+
+// cofnięcie udostępnienia notatki
+app.delete('/api/notes/:id/share', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const { email } = req.body;
+  if (!email || !email.trim()) {
+    return res.status(400).json({ error: 'Podaj adres e-mail użytkownika' });
+  }
+
+  const result = notesDb.unshare(Number(id), req.user.id, email.trim());
+  if (result.error) {
+    return res.status(result.status || 400).json({ error: result.error });
+  }
+  res.json(result.note);
+});
+
 // obsluga 404
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
 // start serwera
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
-});
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}

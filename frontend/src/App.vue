@@ -33,8 +33,15 @@ const tytul = ref('')
 const tresc = ref('')
 const wybranaKategoria = ref('Studia')
 
+// Dane okna udostępniania
+const oknoUdostepniania = ref(false)
+const udostepnianaNotatka = ref(null)
+const emailOdbiorcy = ref('')
+const komunikatUdostepniania = ref('')
+const bladUdostepniania = ref(false)
+
 // Kategorie
-const kategorie = ['Wszystkie', 'Studia', 'Praca', 'Prywatne']
+const kategorie = ['Wszystkie', 'Studia', 'Praca', 'Prywatne', 'Udostępnione']
 
 // Pobieranie notatek z backendu
 async function wczytajNotatki() {
@@ -69,10 +76,13 @@ onMounted(() => {
 // Filtrowanie i sortowanie notatek
 const widoczneNotatki = computed(() => {
   return notatki.value
-    .filter(n =>
-      (kategoria.value === 'Wszystkie' || n.kategoria === kategoria.value) &&
-      (n.tytul + ' ' + n.tresc).toLowerCase().includes(szukaj.value.toLowerCase())
-    )
+    .filter(n => {
+      const pasujeKategoria =
+        kategoria.value === 'Wszystkie' ||
+        (kategoria.value === 'Udostępnione' ? n.czy_wlasna === 0 : n.kategoria === kategoria.value)
+      const pasujeTekst = (n.tytul + ' ' + n.tresc).toLowerCase().includes(szukaj.value.toLowerCase())
+      return pasujeKategoria && pasujeTekst
+    })
     .sort((a, b) => {
       // Przypięte notatki na początku
       if (a.przypieta !== b.przypieta) {
@@ -186,6 +196,7 @@ async function usun(id) {
 
 // Przypinanie notatki
 async function przypnij(n) {
+  if (n.czy_wlasna === 0) return
   const nowyStan = n.przypieta ? 0 : 1
   try {
     const res = await authFetch(`${API_URL}/${n.id}`, {
@@ -202,6 +213,68 @@ async function przypnij(n) {
     }
   } catch (err) {
     console.error('Błąd przypinania notatki:', err)
+  }
+}
+
+// Otwieranie okna udostępniania
+function otworzUdostepnianie(n) {
+  udostepnianaNotatka.value = n
+  emailOdbiorcy.value = ''
+  komunikatUdostepniania.value = ''
+  bladUdostepniania.value = false
+  oknoUdostepniania.value = true
+}
+
+// Udostępnienie notatki innemu użytkownikowi
+async function udostepnijNotatke() {
+  if (!emailOdbiorcy.value.trim() || !udostepnianaNotatka.value) return
+  komunikatUdostepniania.value = ''
+  bladUdostepniania.value = false
+
+  try {
+    const res = await authFetch(`${API_URL}/${udostepnianaNotatka.value.id}/share`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: emailOdbiorcy.value.trim() })
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      bladUdostepniania.value = true
+      komunikatUdostepniania.value = data.error || 'Nie udało się udostępnić notatki'
+      return
+    }
+    const index = notatki.value.findIndex(item => item.id === udostepnianaNotatka.value.id)
+    if (index !== -1) {
+      notatki.value[index] = data
+      udostepnianaNotatka.value = data
+    }
+    emailOdbiorcy.value = ''
+    komunikatUdostepniania.value = 'Notatka została udostępniona!'
+  } catch (err) {
+    bladUdostepniania.value = true
+    komunikatUdostepniania.value = 'Błąd połączenia z serwerem'
+  }
+}
+
+// Cofnięcie udostępnienia
+async function cofnijUdostepnienie(email) {
+  if (!udostepnianaNotatka.value) return
+  try {
+    const res = await authFetch(`${API_URL}/${udostepnianaNotatka.value.id}/share`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    })
+    const data = await res.json()
+    if (res.ok) {
+      const index = notatki.value.findIndex(item => item.id === udostepnianaNotatka.value.id)
+      if (index !== -1) {
+        notatki.value[index] = data
+        udostepnianaNotatka.value = data
+      }
+    }
+  } catch (err) {
+    console.error('Błąd cofania udostępnienia:', err)
   }
 }
 </script>
@@ -299,10 +372,23 @@ async function przypnij(n) {
           :class="'kolor-' + (index % 4)"
         >
           <div class="gora">
-            <span class="etykieta">{{ n.kategoria }}</span>
+            <div class="etykiety-gora">
+              <span class="etykieta">{{ n.kategoria }}</span>
+              <span v-if="n.czy_wlasna === 0" class="etykieta-udostepniona">
+                Od: {{ n.wlasciciel_email }}
+              </span>
+              <span v-else-if="n.udostepniono_dla?.length" class="etykieta-udostepniona" :title="'Udostępniono: ' + n.udostepniono_dla.join(', ')">
+                🔗 {{ n.udostepniono_dla.length }}
+              </span>
+            </div>
 
-            <!-- Przypinanie -->
-            <button class="ikona" @click="przypnij(n)" :aria-label="n.przypieta ? 'Odepnij notatkę' : 'Przypnij notatkę'">
+            <!-- Przypinanie (tylko dla właściciela) -->
+            <button
+              v-if="n.czy_wlasna !== 0"
+              class="ikona"
+              @click="przypnij(n)"
+              :aria-label="n.przypieta ? 'Odepnij notatkę' : 'Przypnij notatkę'"
+            >
               {{ n.przypieta ? '📌' : '♧' }}
             </button>
           </div>
@@ -313,11 +399,13 @@ async function przypnij(n) {
           <div class="dol">
             <small>{{ n.data }}</small>
 
-            <div>
-              <!-- Edycja i usuwanie -->
+            <div v-if="n.czy_wlasna !== 0">
+              <!-- Udostępnianie, edycja i usuwanie -->
+              <button class="ikona" @click="otworzUdostepnianie(n)" title="Udostępnij notatkę" aria-label="Udostępnij notatkę">🔗</button>
               <button class="ikona" @click="edytuj(n)" aria-label="Edytuj notatkę">✎</button>
               <button class="ikona" @click="usun(n.id)" aria-label="Usuń notatkę">✕</button>
             </div>
+            <small v-else class="tylko-odczyt">Tylko do odczytu</small>
           </div>
         </article>
       </section>
@@ -361,6 +449,46 @@ async function przypnij(n) {
         <div class="przyciski">
           <button class="anuluj" @click="formularz = false">Anuluj</button>
           <button class="glowny" @click="zapiszNotatke">Zapisz notatkę</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Okno udostępniania notatki -->
+    <div v-if="oknoUdostepniania && udostepnianaNotatka" class="nakladka" @click.self="oknoUdostepniania = false">
+      <div class="okno">
+        <div class="okno-gora">
+          <h2>Udostępnij notatkę</h2>
+          <button class="ikona" @click="oknoUdostepniania = false" aria-label="Zamknij okno">✕</button>
+        </div>
+
+        <p class="opis-udostepniania">
+          Notatka <strong>{{ udostepnianaNotatka.tytul }}</strong> będzie widoczna dla wybranego użytkownika w trybie <em>tylko do odczytu</em>.
+        </p>
+
+        <label for="email-odbiorcy">Adres e-mail odbiorcy</label>
+        <div class="wiersz-udostepniania">
+          <input
+            id="email-odbiorcy"
+            type="email"
+            v-model="emailOdbiorcy"
+            placeholder="np. student@domena.pl"
+            @keyup.enter="udostepnijNotatke"
+          />
+          <button class="glowny" @click="udostepnijNotatke">Udostępnij</button>
+        </div>
+
+        <p v-if="komunikatUdostepniania" class="komunikat-udostepniania" :class="{ blad: bladUdostepniania }">
+          {{ komunikatUdostepniania }}
+        </p>
+
+        <div v-if="udostepnianaNotatka.udostepniono_dla?.length" class="lista-udostepnien">
+          <label>Osoby mające dostęp:</label>
+          <ul>
+            <li v-for="mail in udostepnianaNotatka.udostepniono_dla" :key="mail">
+              <span>{{ mail }}</span>
+              <button class="ikona usun-dostep" @click="cofnijUdostepnienie(mail)" title="Cofnij dostęp">✕</button>
+            </li>
+          </ul>
         </div>
       </div>
     </div>
@@ -645,6 +773,27 @@ h2 {
   color: #6d6263;
 }
 
+.etykiety-gora {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.etykieta-udostepniona {
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.65);
+  color: #66575b;
+  padding: 3px 8px;
+  border-radius: 8px;
+}
+
+.tylko-odczyt {
+  font-style: italic;
+  font-size: 12px;
+}
+
 /* Odstępy przy tytule notatki */
 .notatka h3 {
   margin: 22px 0 8px;
@@ -753,6 +902,61 @@ h2 {
   border-radius: 12px;
 }
 
+/* Okno udostępniania */
+.opis-udostepniania {
+  font-size: 14px;
+  color: #6d6263;
+  margin: 12px 0 6px;
+}
+
+.wiersz-udostepniania {
+  display: flex;
+  gap: 10px;
+}
+
+.wiersz-udostepniania input {
+  flex: 1;
+}
+
+.komunikat-udostepniania {
+  margin-top: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4f7759;
+}
+
+.komunikat-udostepniania.blad {
+  color: #c23b3b;
+}
+
+.lista-udostepnien {
+  margin-top: 18px;
+}
+
+.lista-udostepnien ul {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lista-udostepnien li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #f8f2f4;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+
+.usun-dostep {
+  font-size: 14px;
+  color: #a33b52;
+}
+
 /* Tryb ciemny */
 
 /* Tło */
@@ -847,8 +1051,23 @@ h2 {
 
 .ciemny .etykieta,
 .ciemny .tresc,
-.ciemny .dol small {
+.ciemny .dol small,
+.ciemny .opis-udostepniania {
   color: #e1d7d9;
+}
+
+.ciemny .etykieta-udostepniona {
+  background: rgba(0, 0, 0, 0.3);
+  color: #f2e9e9;
+}
+
+.ciemny .lista-udostepnien li {
+  background: #383638;
+  color: #f2e9e9;
+}
+
+.ciemny .usun-dostep {
+  color: #f7a8b8;
 }
 
 .ciemny .pusto h3 {

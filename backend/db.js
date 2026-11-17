@@ -7,7 +7,7 @@ const filename = fileURLToPath(import.meta.url);
 const dirname = path.dirname(filename);
 
 // sciezka pliku bazy SQLite
-const DB_PATH = path.join(dirname, 'notatki.db');
+const DB_PATH = process.env.DB_PATH || path.join(dirname, 'notatki.db');
 
 export const db = new DatabaseSync(DB_PATH);
 
@@ -71,6 +71,19 @@ export function initDatabase() {
       user_id INTEGER NOT NULL,
       created_at TEXT NOT NULL,
       FOREIGN KEY (user_id) REFERENCES uzytkownicy(id) ON DELETE CASCADE
+    );
+  `);
+
+  // Tabela udostępnionych notatek (tylko do odczytu)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS udostepnione_notatki (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      note_id INTEGER NOT NULL,
+      shared_with_user_id INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      UNIQUE(note_id, shared_with_user_id),
+      FOREIGN KEY (note_id) REFERENCES notatki(id) ON DELETE CASCADE,
+      FOREIGN KEY (shared_with_user_id) REFERENCES uzytkownicy(id) ON DELETE CASCADE
     );
   `);
 
@@ -144,17 +157,62 @@ export const usersDb = {
  * zapytania sql dla notatek (z filtrowaniem po user_id)
  */
 export const notesDb = {
-  // pobieranie wszystkich notatek danego użytkownika
-  getAll: (userId) => {
-    return db.prepare('SELECT * FROM notatki WHERE user_id = ? ORDER BY przypieta DESC, id DESC').all(userId);
+  // pobranie listy adresów e-mail, którym udostępniono daną notatkę
+  getSharedEmails: (noteId) => {
+    const rows = db.prepare(`
+      SELECT u.email
+      FROM udostepnione_notatki un
+      JOIN uzytkownicy u ON u.id = un.shared_with_user_id
+      WHERE un.note_id = ?
+      ORDER BY un.id ASC
+    `).all(noteId);
+    return rows.map(r => r.email);
   },
 
-  // pobranie notatki po ID dla danego użytkownika
+  // pobieranie wszystkich notatek danego użytkownika (własnych + udostępnionych mu)
+  getAll: (userId) => {
+    const ownNotes = db.prepare(`
+      SELECT n.*, u.email AS wlasciciel_email, 1 AS czy_wlasna
+      FROM notatki n
+      LEFT JOIN uzytkownicy u ON u.id = n.user_id
+      WHERE n.user_id = ?
+    `).all(userId).map(n => ({
+      ...n,
+      udostepniono_dla: notesDb.getSharedEmails(n.id)
+    }));
+
+    const sharedNotes = db.prepare(`
+      SELECT n.*, u.email AS wlasciciel_email, 0 AS czy_wlasna
+      FROM udostepnione_notatki un
+      JOIN notatki n ON n.id = un.note_id
+      LEFT JOIN uzytkownicy u ON u.id = n.user_id
+      WHERE un.shared_with_user_id = ?
+    `).all(userId).map(n => ({
+      ...n,
+      przypieta: 0,
+      udostepniono_dla: []
+    }));
+
+    return [...ownNotes, ...sharedNotes].sort((a, b) => {
+      if (a.przypieta !== b.przypieta) return b.przypieta - a.przypieta;
+      return b.id - a.id;
+    });
+  },
+
+  // pobranie notatki po ID dla właściciela
   getById: (id, userId) => {
+    let note;
     if (userId !== undefined) {
-      return db.prepare('SELECT * FROM notatki WHERE id = ? AND user_id = ?').get(id, userId);
+      note = db.prepare('SELECT * FROM notatki WHERE id = ? AND user_id = ?').get(id, userId);
+    } else {
+      note = db.prepare('SELECT * FROM notatki WHERE id = ?').get(id);
     }
-    return db.prepare('SELECT * FROM notatki WHERE id = ?').get(id);
+    if (!note) return null;
+    return {
+      ...note,
+      czy_wlasna: 1,
+      udostepniono_dla: notesDb.getSharedEmails(note.id)
+    };
   },
 
   // dodanie nowej notatki
@@ -162,10 +220,20 @@ export const notesDb = {
     const dataNotatki = data ?? new Date().toLocaleDateString('pl-PL');
     const stmt = db.prepare('INSERT INTO notatki (user_id, tytul, tresc, kategoria, przypieta, data) VALUES (?, ?, ?, ?, ?, ?)');
     const result = stmt.run(userId, tytul, tresc, kategoria ?? 'Ogólne', przypieta ? 1 : 0, dataNotatki);
-    return { id: result.lastInsertRowid, user_id: userId, tytul, tresc, kategoria: kategoria ?? 'Ogólne', przypieta: przypieta ? 1 : 0, data: dataNotatki };
+    return {
+      id: Number(result.lastInsertRowid),
+      user_id: userId,
+      tytul,
+      tresc,
+      kategoria: kategoria ?? 'Ogólne',
+      przypieta: przypieta ? 1 : 0,
+      data: dataNotatki,
+      czy_wlasna: 1,
+      udostepniono_dla: []
+    };
   },
 
-  // aktualizacja notatki
+  // aktualizacja notatki (tylko właściciel)
   update: (id, { tytul, tresc, kategoria, przypieta }, userId) => {
     const existing = notesDb.getById(id, userId);
     if (!existing) return null;
@@ -186,10 +254,59 @@ export const notesDb = {
     return notesDb.getById(id, userId);
   },
 
-  // usuniecie notatki
+  // usuniecie notatki (tylko właściciel)
   delete: (id, userId) => {
+    const existing = notesDb.getById(id, userId);
+    if (!existing) return false;
+    db.prepare('DELETE FROM udostepnione_notatki WHERE note_id = ?').run(id);
     const stmt = db.prepare('DELETE FROM notatki WHERE id = ? AND user_id = ?');
     const result = stmt.run(id, userId);
     return result.changes > 0;
+  },
+
+  // udostępnienie notatki innemu użytkownikowi po adresie e-mail
+  share: (noteId, ownerId, targetEmail) => {
+    const note = notesDb.getById(noteId, ownerId);
+    if (!note) return { error: 'Notatka nie istnieje lub brak uprawnień', status: 404 };
+
+    const targetUser = usersDb.findByEmail(targetEmail);
+    if (!targetUser) return { error: 'Użytkownik o podanym adresie e-mail nie istnieje', status: 404 };
+
+    if (targetUser.id === ownerId) {
+      return { error: 'Nie możesz udostępnić notatki samemu sobie', status: 400 };
+    }
+
+    const alreadyShared = db.prepare(
+      'SELECT id FROM udostepnione_notatki WHERE note_id = ? AND shared_with_user_id = ?'
+    ).get(noteId, targetUser.id);
+
+    if (alreadyShared) {
+      return { error: 'Notatka jest już udostępniona temu użytkownikowi', status: 400 };
+    }
+
+    db.prepare(
+      'INSERT INTO udostepnione_notatki (note_id, shared_with_user_id, created_at) VALUES (?, ?, ?)'
+    ).run(noteId, targetUser.id, new Date().toISOString());
+
+    return {
+      note: notesDb.getById(noteId, ownerId)
+    };
+  },
+
+  // cofnięcie udostępnienia notatki
+  unshare: (noteId, ownerId, targetEmail) => {
+    const note = notesDb.getById(noteId, ownerId);
+    if (!note) return { error: 'Notatka nie istnieje lub brak uprawnień', status: 404 };
+
+    const targetUser = usersDb.findByEmail(targetEmail);
+    if (!targetUser) return { error: 'Użytkownik nie istnieje', status: 404 };
+
+    db.prepare(
+      'DELETE FROM udostepnione_notatki WHERE note_id = ? AND shared_with_user_id = ?'
+    ).run(noteId, targetUser.id);
+
+    return {
+      note: notesDb.getById(noteId, ownerId)
+    };
   }
 };

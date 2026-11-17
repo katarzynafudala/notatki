@@ -1,0 +1,45 @@
+// Use DBML to define your database structure
+// Docs: https://dbml.dbdiagram.io/docs
+
+Table uzytkownicy {
+  id integer [primary key, increment]
+  email varchar [unique, not null]
+  password_hash varchar [not null]
+  salt varchar [not null]
+  created_at timestamp [not null]
+}
+
+Table notatki {
+  id integer [primary key, increment]
+  user_id integer
+  tytul varchar [not null]
+  tresc text [not null, note: 'Treść notatki']
+  kategoria varchar [default: 'Ogólne']
+  przypieta integer [default: 0, note: '0 = nieprzypięta, 1 = przypięta']
+  data varchar [not null, note: 'Data utworzenia w formacie pl-PL']
+}
+
+Table sesje {
+  token varchar [primary key]
+  user_id integer [not null]
+  created_at timestamp [not null]
+}
+
+Table udostepnione_notatki {
+  id integer [primary key, increment]
+  note_id integer [not null]
+  shared_with_user_id integer [not null]
+  created_at timestamp [not null]
+
+  Indexes {
+    (note_id, shared_with_user_id) [unique]
+  }
+}
+
+Ref user_notes: notatki.user_id > uzytkownicy.id
+
+Ref user_sessions: sesje.user_id > uzytkownicy.id [delete: cascade]
+
+Ref shared_note: udostepnione_notatki.note_id > notatki.id [delete: cascade]
+
+Ref shared_recipient: udostepnione_notatki.shared_with_user_id > uzytkownicy.id [delete: cascade]
